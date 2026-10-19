@@ -7,8 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthException, PostgrestException;
 
+import 'package:my_app/core/errors.dart';
 import 'package:my_app/main.dart';
 import 'package:my_app/models/todo.dart';
+import 'package:my_app/services/auth_service.dart';
+import 'package:my_app/services/todo_repository.dart';
 import 'package:my_app/supabase_config.dart';
 
 const testUser = AppUser(id: 'user-1', email: 'me@example.com');

@@ -1,18 +1,18 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/date_utils.dart';
+import 'core/errors.dart';
 import 'models/todo.dart';
+import 'services/auth_service.dart';
+import 'services/legacy_local_todos.dart';
+import 'services/todo_repository.dart';
 import 'supabase_config.dart';
 
 part 'auth.dart';
-part 'todo_repository.dart';
 
 void main() {
   runApp(const MyApp());
@@ -87,7 +87,7 @@ class _SupabaseBootstrapState extends State<_SupabaseBootstrap> {
           return AuthGate(auth: auth, repository: repository);
         }
         if (snapshot.hasError) {
-          _logError('Supabase 초기화 실패', snapshot.error!);
+          logError('Supabase 초기화 실패', snapshot.error!);
           final error = snapshot.error;
           return Scaffold(
             body: SafeArea(
@@ -211,7 +211,7 @@ class _TodoPageState extends State<TodoPage> {
         _loadState = _LoadState.ready;
       });
     } catch (e) {
-      _logError('할 일 불러오기 실패', e);
+      logError('할 일 불러오기 실패', e);
       if (!mounted) return;
       setState(() {
         _loadState = _LoadState.error;
@@ -227,7 +227,7 @@ class _TodoPageState extends State<TodoPage> {
       final loaded = await widget.repository.fetchTodos();
       if (mounted) setState(() => _todos = loaded);
     } catch (e) {
-      _logError('할 일 다시 맞추기 실패', e);
+      logError('할 일 다시 맞추기 실패', e);
     }
   }
 
@@ -241,7 +241,7 @@ class _TodoPageState extends State<TodoPage> {
         ];
       });
     } catch (e) {
-      _logError('이전 로컬 할 일 확인 실패', e);
+      logError('이전 로컬 할 일 확인 실패', e);
     }
   }
 
@@ -263,10 +263,10 @@ class _TodoPageState extends State<TodoPage> {
       if (mounted) setState(() => onSuccess(result));
       return true;
     } catch (e) {
-      _logError(failure, e);
+      logError(failure, e);
       if (!mounted) return false;
       _showMessage('$failure ${describeError(e)}');
-      if (_isUncertainFailure(e)) unawaited(_resync());
+      if (isUncertainFailure(e)) unawaited(_resync());
       return false;
     }
   }
@@ -383,7 +383,7 @@ class _TodoPageState extends State<TodoPage> {
     try {
       await LegacyLocalTodos().clear();
     } catch (e) {
-      _logError('이전 로컬 할 일 정리 실패', e);
+      logError('이전 로컬 할 일 정리 실패', e);
     }
     if (!mounted) return;
     setState(() {
@@ -395,7 +395,7 @@ class _TodoPageState extends State<TodoPage> {
   }
 
   void _failImport(Object error) {
-    _logError('이전 할 일 가져오기 실패', error);
+    logError('이전 할 일 가져오기 실패', error);
     if (mounted) {
       _showMessage('이전 할 일을 가져오지 못했습니다. ${describeError(error)}');
     }
@@ -407,7 +407,7 @@ class _TodoPageState extends State<TodoPage> {
       // 성공하면 AuthGate가 로그인 화면으로 바꾼다.
       await widget.auth.signOut();
     } catch (e) {
-      _logError('로그아웃 실패', e);
+      logError('로그아웃 실패', e);
       if (mounted) _showMessage('로그아웃하지 못했습니다. ${describeError(e)}');
     } finally {
       if (mounted) setState(() => _signingOut = false);
