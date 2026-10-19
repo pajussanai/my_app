@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../app/theme.dart';
 import '../../core/errors.dart';
 import '../../models/todo.dart';
 import '../../services/auth_service.dart';
@@ -12,10 +11,12 @@ import '../../services/todo_repository.dart';
 import '../../widgets/empty_view.dart';
 import '../../widgets/status_view.dart';
 import 'widgets/edit_todo_dialog.dart';
+import 'widgets/legacy_import_banner.dart';
 import 'widgets/summary_card.dart';
 import 'widgets/todo_card.dart';
-import 'widgets/todo_filter_chip.dart';
-import 'widgets/todo_option_pickers.dart';
+import 'widgets/todo_filters.dart';
+import 'widgets/todo_header.dart';
+import 'widgets/todo_input_card.dart';
 
 class TodoPage extends StatefulWidget {
   const TodoPage({
@@ -33,16 +34,6 @@ class TodoPage extends StatefulWidget {
   State<TodoPage> createState() => _TodoPageState();
 }
 
-enum _StatusFilter {
-  all('전체'),
-  active('진행 중'),
-  done('완료');
-
-  const _StatusFilter(this.label);
-
-  final String label;
-}
-
 enum _LoadState { loading, ready, error }
 
 class _TodoPageState extends State<TodoPage> {
@@ -58,7 +49,7 @@ class _TodoPageState extends State<TodoPage> {
   DateTime? _newDueDate;
 
   // 목록 필터 (null이면 모든 카테고리)
-  _StatusFilter _statusFilter = _StatusFilter.all;
+  TodoStatusFilter _statusFilter = TodoStatusFilter.all;
   TodoCategory? _categoryFilter;
 
   // 서버 응답을 기다리는 중인 할 일(중복 요청을 막는다)
@@ -78,9 +69,9 @@ class _TodoPageState extends State<TodoPage> {
 
   bool _matchesFilters(Todo todo) {
     final statusMatches = switch (_statusFilter) {
-      _StatusFilter.all => true,
-      _StatusFilter.active => !todo.done,
-      _StatusFilter.done => todo.done,
+      TodoStatusFilter.all => true,
+      TodoStatusFilter.active => !todo.done,
+      TodoStatusFilter.done => todo.done,
     };
     final query = _searchController.text.trim().toLowerCase();
     return statusMatches &&
@@ -341,7 +332,13 @@ class _TodoPageState extends State<TodoPage> {
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-          sliver: SliverToBoxAdapter(child: _buildHeader()),
+          sliver: SliverToBoxAdapter(
+            child: TodoHeader(
+              email: widget.user.email,
+              onRefresh: _loadState == _LoadState.loading ? null : _loadTodos,
+              onSignOut: _signingOut ? null : _signOut,
+            ),
+          ),
         ),
         ...switch (_loadState) {
           _LoadState.loading => [
@@ -367,63 +364,6 @@ class _TodoPageState extends State<TodoPage> {
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                '오늘 할 일',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textMain,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: '새로고침',
-              icon: const Icon(Icons.refresh),
-              color: AppColors.textSub,
-              onPressed: _loadState == _LoadState.loading ? null : _loadTodos,
-            ),
-            IconButton(
-              tooltip: '로그아웃',
-              icon: const Icon(Icons.logout),
-              color: AppColors.textSub,
-              onPressed: _signingOut ? null : _signOut,
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          '해야 할 일을 적고 하나씩 완료해 보세요.',
-          style: TextStyle(fontSize: 14, color: AppColors.textSub),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            const Icon(
-              Icons.account_circle_outlined,
-              size: 16,
-              color: AppColors.textSub,
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                widget.user.email ?? '로그인됨',
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, color: AppColors.textSub),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   List<Widget> _buildReadySlivers() {
     final visible = _visibleTodos;
 
@@ -433,7 +373,12 @@ class _TodoPageState extends State<TodoPage> {
         sliver: SliverList.list(
           children: [
             if (_legacyTodos.isNotEmpty && !_legacyHidden) ...[
-              _buildLegacyBanner(),
+              LegacyImportBanner(
+                count: _legacyTodos.length,
+                importing: _importing,
+                onDismiss: () => setState(() => _legacyHidden = true),
+                onImport: _importLegacyTodos,
+              ),
               const SizedBox(height: 16),
             ],
             SummaryCard(
@@ -442,10 +387,26 @@ class _TodoPageState extends State<TodoPage> {
               done: _doneCount,
             ),
             const SizedBox(height: 16),
-            _buildInput(),
+            TodoInputCard(
+              controller: _controller,
+              adding: _adding,
+              onAdd: _addTodo,
+              category: _newCategory,
+              priority: _newPriority,
+              dueDate: _newDueDate,
+              onCategoryChanged: (c) => setState(() => _newCategory = c),
+              onPriorityChanged: (p) => setState(() => _newPriority = p),
+              onDueDateChanged: (d) => setState(() => _newDueDate = d),
+            ),
             const SizedBox(height: 20),
             if (_todos.isNotEmpty) ...[
-              _buildFilters(),
+              TodoFilters(
+                searchController: _searchController,
+                statusFilter: _statusFilter,
+                categoryFilter: _categoryFilter,
+                onStatusChanged: (f) => setState(() => _statusFilter = f),
+                onCategoryChanged: (c) => setState(() => _categoryFilter = c),
+              ),
               const SizedBox(height: 16),
             ],
           ],
@@ -487,206 +448,5 @@ class _TodoPageState extends State<TodoPage> {
           ),
         ),
     ];
-  }
-
-  Widget _buildLegacyBanner() {
-    final count = _legacyTodos.length;
-
-    return Card(
-      key: const Key('legacyBanner'),
-      elevation: 0,
-      color: AppColors.warningBackground,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.inventory_2_outlined,
-                  color: Color(0xFFD97706),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '서버 연결 전에 이 브라우저에 저장한 할 일 $count개가 있습니다. '
-                    '자동으로 옮겨지지 않으며, 가져오면 현재 계정에 저장됩니다.',
-                    style: const TextStyle(
-                      color: AppColors.textMain,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 4,
-                children: [
-                  TextButton(
-                    onPressed: _importing
-                        ? null
-                        : () => setState(() => _legacyHidden = true),
-                    child: const Text('나중에'),
-                  ),
-                  TextButton(
-                    onPressed: _importing ? null : _importLegacyTodos,
-                    child: _importing
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('서버로 가져오기'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration({
-    required String hintText,
-    required Color fillColor,
-    Widget? prefixIcon,
-    Widget? suffixIcon,
-  }) {
-    return appFieldDecoration(
-      hintText: hintText,
-      hintStyle: const TextStyle(color: AppColors.textSub),
-      fillColor: fillColor,
-      isDense: true,
-      prefixIcon: prefixIcon,
-      suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    );
-  }
-
-  Widget _buildInput() {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('todoInput'),
-                    controller: _controller,
-                    enabled: !_adding,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _addTodo(),
-                    decoration: _inputDecoration(
-                      hintText: '할 일을 입력하세요',
-                      fillColor: AppColors.background,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 48,
-                  child: FilledButton.icon(
-                    onPressed: _adding ? null : _addTodo,
-                    icon: _adding
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add, size: 20),
-                    label: const Text('추가'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TodoOptionPickers(
-              category: _newCategory,
-              priority: _newPriority,
-              dueDate: _newDueDate,
-              onCategoryChanged: (c) => setState(() => _newCategory = c),
-              onPriorityChanged: (p) => setState(() => _newPriority = p),
-              onDueDateChanged: (d) => setState(() => _newDueDate = d),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilters() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          key: const Key('searchInput'),
-          controller: _searchController,
-          textInputAction: TextInputAction.search,
-          decoration: _inputDecoration(
-            hintText: '제목으로 검색',
-            fillColor: Colors.white,
-            prefixIcon: const Icon(Icons.search, color: AppColors.textSub),
-            suffixIcon: _searchController.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: '검색어 지우기',
-                    icon: const Icon(Icons.close, color: AppColors.textSub),
-                    onPressed: _searchController.clear,
-                  ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final f in _StatusFilter.values)
-              TodoFilterChip(
-                label: f.label,
-                selected: _statusFilter == f,
-                onSelected: () => setState(() => _statusFilter = f),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TodoFilterChip(
-              label: '모든 카테고리',
-              selected: _categoryFilter == null,
-              onSelected: () => setState(() => _categoryFilter = null),
-            ),
-            for (final c in TodoCategory.values)
-              TodoFilterChip(
-                label: c.label,
-                icon: c.icon,
-                iconColor: c.color,
-                selected: _categoryFilter == c,
-                onSelected: () => setState(() => _categoryFilter = c),
-              ),
-          ],
-        ),
-      ],
-    );
   }
 }
