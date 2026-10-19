@@ -1,33 +1,11 @@
-part of 'main.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// 로그인 상태에 따라 로그인 화면 또는 할 일 화면을 보여 준다.
-///
-/// 로그인하지 않은 사용자는 할 일 화면에 들어갈 수 없다.
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key, required this.auth, required this.repository});
-
-  final AuthService auth;
-  final TodoRepository repository;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<AppUser?>(
-      stream: auth.userChanges,
-      initialData: auth.currentUser,
-      builder: (context, snapshot) {
-        final user = snapshot.data;
-        if (user == null) return AuthPage(auth: auth);
-        // 계정이 바뀌면 이전 사용자의 화면 상태를 남기지 않는다.
-        return TodoPage(
-          key: ValueKey(user.id),
-          user: user,
-          auth: auth,
-          repository: repository,
-        );
-      },
-    );
-  }
-}
+import '../../app/theme.dart';
+import '../../core/errors.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/error_box.dart';
+import 'verify_email_view.dart';
 
 enum _AuthMode { signIn, signUp }
 
@@ -137,7 +115,7 @@ class _AuthPageState extends State<AuthPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: pendingEmail != null
-                      ? _VerifyEmailView(
+                      ? VerifyEmailView(
                           auth: widget.auth,
                           email: pendingEmail,
                           onBack: () => setState(() {
@@ -244,7 +222,7 @@ class _AuthPageState extends State<AuthPage> {
             ],
             if (_error != null) ...[
               const SizedBox(height: 16),
-              _ErrorBox(message: _error!),
+              ErrorBox(message: _error!),
             ],
             const SizedBox(height: 20),
             SizedBox(
@@ -283,142 +261,6 @@ class _AuthPageState extends State<AuthPage> {
       labelText: label,
       prefixIcon: Icon(icon, color: AppColors.textSub),
       fillColor: AppColors.background,
-    );
-  }
-}
-
-/// 회원가입 후 이메일 인증을 안내하는 화면.
-class _VerifyEmailView extends StatefulWidget {
-  const _VerifyEmailView({
-    required this.auth,
-    required this.email,
-    required this.onBack,
-  });
-
-  final AuthService auth;
-  final String email;
-  final VoidCallback onBack;
-
-  @override
-  State<_VerifyEmailView> createState() => _VerifyEmailViewState();
-}
-
-class _VerifyEmailViewState extends State<_VerifyEmailView> {
-  bool _sending = false;
-  String? _notice;
-  bool _noticeIsError = false;
-
-  Future<void> _resend() async {
-    setState(() {
-      _sending = true;
-      _notice = null;
-    });
-    try {
-      await widget.auth.resendConfirmation(widget.email);
-      if (mounted) {
-        setState(() {
-          _notice = '인증 메일을 다시 보냈습니다.';
-          _noticeIsError = false;
-        });
-      }
-    } catch (e) {
-      logError('인증 메일 재발송 실패', e);
-      if (mounted) {
-        setState(() {
-          _notice = describeError(e);
-          _noticeIsError = true;
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Icon(
-          Icons.mark_email_unread_outlined,
-          size: 48,
-          color: AppColors.primary,
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          '이메일 인증이 필요합니다',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textMain,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '${widget.email} 주소로 인증 메일을 보냈습니다.\n'
-          '메일의 링크를 눌러 인증을 마친 뒤 로그인해 주세요.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textSub, height: 1.5),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          '메일이 보이지 않으면 스팸함을 확인해 주세요.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: AppColors.textSub),
-        ),
-        if (_notice != null) ...[
-          const SizedBox(height: 16),
-          _noticeIsError
-              ? _ErrorBox(message: _notice!)
-              : Text(
-                  _notice!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.primary),
-                ),
-        ],
-        const SizedBox(height: 20),
-        OutlinedButton(
-          onPressed: _sending ? null : _resend,
-          child: _sending
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('인증 메일 다시 보내기'),
-        ),
-        const SizedBox(height: 8),
-        FilledButton(onPressed: widget.onBack, child: const Text('로그인 화면으로')),
-      ],
-    );
-  }
-}
-
-class _ErrorBox extends StatelessWidget {
-  const _ErrorBox({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: AppColors.danger),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
