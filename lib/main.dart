@@ -1,17 +1,22 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/theme.dart';
-import 'core/date_utils.dart';
 import 'core/errors.dart';
 import 'models/todo.dart';
 import 'services/auth_service.dart';
 import 'services/legacy_local_todos.dart';
 import 'services/todo_repository.dart';
 import 'supabase_config.dart';
+import 'features/todos/widgets/edit_todo_dialog.dart';
+import 'features/todos/widgets/summary_card.dart';
+import 'features/todos/widgets/todo_card.dart';
+import 'features/todos/widgets/todo_filter_chip.dart';
+import 'features/todos/widgets/todo_option_pickers.dart';
+import 'widgets/empty_view.dart';
+import 'widgets/status_view.dart';
 
 part 'auth.dart';
 
@@ -80,7 +85,7 @@ class _SupabaseBootstrapState extends State<_SupabaseBootstrap> {
           final error = snapshot.error;
           return Scaffold(
             body: SafeArea(
-              child: _StatusView(
+              child: StatusView(
                 icon: Icons.cloud_off_outlined,
                 message: error is StateError
                     ? '앱 설정 오류: ${error.message}'
@@ -316,7 +321,7 @@ class _TodoPageState extends State<TodoPage> {
   Future<void> _editTodo(Todo todo) async {
     final edited = await showDialog<Todo>(
       context: context,
-      builder: (_) => _EditTodoDialog(todo: todo),
+      builder: (_) => EditTodoDialog(todo: todo),
     );
     if (edited == null || !mounted) return;
     await _whileBusy(
@@ -433,7 +438,7 @@ class _TodoPageState extends State<TodoPage> {
           _LoadState.error => [
             SliverFillRemaining(
               hasScrollBody: false,
-              child: _StatusView(
+              child: StatusView(
                 icon: Icons.cloud_off_outlined,
                 message: '할 일을 불러오지 못했습니다.\n$_loadError',
                 actionLabel: '다시 시도',
@@ -516,7 +521,7 @@ class _TodoPageState extends State<TodoPage> {
               _buildLegacyBanner(),
               const SizedBox(height: 16),
             ],
-            _SummaryCard(
+            SummaryCard(
               key: const Key('summary'),
               total: _todos.length,
               done: _doneCount,
@@ -534,7 +539,7 @@ class _TodoPageState extends State<TodoPage> {
       if (_todos.isEmpty)
         const SliverFillRemaining(
           hasScrollBody: false,
-          child: _EmptyView(
+          child: EmptyView(
             icon: Icons.checklist_rounded,
             message: '아직 할 일이 없습니다.\n위 입력창에서 할 일을 추가해 보세요.',
           ),
@@ -542,7 +547,7 @@ class _TodoPageState extends State<TodoPage> {
       else if (visible.isEmpty)
         const SliverFillRemaining(
           hasScrollBody: false,
-          child: _EmptyView(
+          child: EmptyView(
             icon: Icons.search_off,
             message: '조건에 맞는 할 일이 없습니다.\n검색어나 필터를 바꿔 보세요.',
           ),
@@ -555,7 +560,7 @@ class _TodoPageState extends State<TodoPage> {
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final todo = visible[index];
-              return _TodoCard(
+              return TodoCard(
                 key: ValueKey(todo.id),
                 todo: todo,
                 busy: _busyIds.contains(todo.id),
@@ -698,7 +703,7 @@ class _TodoPageState extends State<TodoPage> {
               ],
             ),
             const SizedBox(height: 8),
-            _TodoOptionPickers(
+            TodoOptionPickers(
               category: _newCategory,
               priority: _newPriority,
               dueDate: _newDueDate,
@@ -739,7 +744,7 @@ class _TodoPageState extends State<TodoPage> {
           runSpacing: 8,
           children: [
             for (final f in _StatusFilter.values)
-              _FilterChip(
+              TodoFilterChip(
                 label: f.label,
                 selected: _statusFilter == f,
                 onSelected: () => setState(() => _statusFilter = f),
@@ -751,13 +756,13 @@ class _TodoPageState extends State<TodoPage> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _FilterChip(
+            TodoFilterChip(
               label: '모든 카테고리',
               selected: _categoryFilter == null,
               onSelected: () => setState(() => _categoryFilter = null),
             ),
             for (final c in TodoCategory.values)
-              _FilterChip(
+              TodoFilterChip(
                 label: c.label,
                 icon: c.icon,
                 iconColor: c.color,
@@ -767,674 +772,6 @@ class _TodoPageState extends State<TodoPage> {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// 카테고리·중요도·마감일 선택 버튼 묶음. 추가 입력창과 수정 화면에서 함께 쓴다.
-class _TodoOptionPickers extends StatelessWidget {
-  const _TodoOptionPickers({
-    required this.category,
-    required this.priority,
-    required this.dueDate,
-    required this.onCategoryChanged,
-    required this.onPriorityChanged,
-    required this.onDueDateChanged,
-    this.keyPrefix = '',
-  });
-
-  final TodoCategory category;
-  final TodoPriority priority;
-  final DateTime? dueDate;
-  final ValueChanged<TodoCategory> onCategoryChanged;
-  final ValueChanged<TodoPriority> onPriorityChanged;
-  final ValueChanged<DateTime?> onDueDateChanged;
-
-  /// 같은 화면에 두 번 나올 때(추가 입력창 + 수정 화면) 테스트 키를 구분한다.
-  final String keyPrefix;
-
-  Future<void> _pickDueDate(BuildContext context) async {
-    final today = dateOnly(DateTime.now());
-    final current = dueDate;
-    // 이미 정해진 마감일이 선택 범위 밖이어도 열 수 있게 범위를 넓힌다.
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: current ?? today,
-      firstDate: DateTime(min(today.year - 1, current?.year ?? today.year)),
-      lastDate: DateTime(max(today.year + 10, current?.year ?? 0), 12, 31),
-      helpText: '마감일 선택',
-      cancelText: '취소',
-      confirmText: '확인',
-    );
-    if (picked != null) onDueDateChanged(dateOnly(picked));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dueDate = this.dueDate;
-    final menuShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    );
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        PopupMenuButton<TodoCategory>(
-          key: Key('${keyPrefix}categoryPicker'),
-          tooltip: '카테고리 선택',
-          initialValue: category,
-          color: Colors.white,
-          shape: menuShape,
-          onSelected: onCategoryChanged,
-          itemBuilder: (_) => [
-            for (final c in TodoCategory.values)
-              PopupMenuItem(
-                value: c,
-                child: _MenuRow(icon: c.icon, color: c.color, label: c.label),
-              ),
-          ],
-          child: _PickerChip(
-            icon: category.icon,
-            color: category.color,
-            label: category.label,
-          ),
-        ),
-        PopupMenuButton<TodoPriority>(
-          key: Key('${keyPrefix}priorityPicker'),
-          tooltip: '중요도 선택',
-          initialValue: priority,
-          color: Colors.white,
-          shape: menuShape,
-          onSelected: onPriorityChanged,
-          itemBuilder: (_) => [
-            for (final p in TodoPriority.values)
-              PopupMenuItem(
-                value: p,
-                child: _MenuRow(
-                  icon: Icons.flag,
-                  color: p.color,
-                  label: p.label,
-                ),
-              ),
-          ],
-          child: _PickerChip(
-            icon: Icons.flag,
-            color: priority.color,
-            label: '중요도 ${priority.label}',
-          ),
-        ),
-        InkWell(
-          key: Key('${keyPrefix}dueDatePicker'),
-          onTap: () => _pickDueDate(context),
-          borderRadius: BorderRadius.circular(10),
-          child: _PickerChip(
-            icon: Icons.event,
-            color: dueDate == null ? AppColors.textSub : AppColors.primary,
-            label: dueDate == null
-                ? '마감일 선택'
-                : '마감 ${formatDueDate(dueDate, dateOnly(DateTime.now()))}',
-            trailing: dueDate == null
-                ? null
-                : InkResponse(
-                    key: Key('${keyPrefix}clearDueDate'),
-                    onTap: () => onDueDateChanged(null),
-                    radius: 16,
-                    child: const Tooltip(
-                      message: '마감일 지우기',
-                      child: Icon(
-                        Icons.close,
-                        size: 16,
-                        color: AppColors.textSub,
-                      ),
-                    ),
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 할 일의 제목·카테고리·중요도·마감일을 고치는 대화상자.
-/// 저장을 누르면 수정된 할 일을 돌려준다(서버 반영은 호출한 쪽이 한다).
-class _EditTodoDialog extends StatefulWidget {
-  const _EditTodoDialog({required this.todo});
-
-  final Todo todo;
-
-  @override
-  State<_EditTodoDialog> createState() => _EditTodoDialogState();
-}
-
-class _EditTodoDialogState extends State<_EditTodoDialog> {
-  late final TextEditingController _titleController = TextEditingController(
-    text: widget.todo.title,
-  );
-  late TodoCategory _category = widget.todo.category;
-  late TodoPriority _priority = widget.todo.priority;
-  late DateTime? _dueDate = widget.todo.dueDate;
-
-  @override
-  void initState() {
-    super.initState();
-    _titleController.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) return;
-    Navigator.of(context).pop(
-      widget.todo.copyWith(
-        title: title,
-        category: _category,
-        priority: _priority,
-        dueDate: _dueDate,
-        clearDueDate: _dueDate == null,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('할 일 수정'),
-      backgroundColor: Colors.white,
-      insetPadding: const EdgeInsets.all(16),
-      scrollable: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      content: SizedBox(
-        width: 400,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              key: const Key('editTitleInput'),
-              controller: _titleController,
-              autofocus: true,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _save(),
-              decoration: appFieldDecoration(
-                hintText: '할 일 제목',
-                fillColor: AppColors.background,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _TodoOptionPickers(
-              keyPrefix: 'edit.',
-              category: _category,
-              priority: _priority,
-              dueDate: _dueDate,
-              onCategoryChanged: (c) => setState(() => _category = c),
-              onPriorityChanged: (p) => setState(() => _priority = p),
-              onDueDateChanged: (d) => setState(() => _dueDate = d),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('취소'),
-        ),
-        FilledButton(
-          onPressed: _titleController.text.trim().isEmpty ? null : _save,
-          child: const Text('저장'),
-        ),
-      ],
-    );
-  }
-}
-
-/// 추가 입력창 아래에서 카테고리·중요도·마감일을 고르는 작은 버튼 모양.
-class _PickerChip extends StatelessWidget {
-  const _PickerChip({
-    required this.icon,
-    required this.color,
-    required this.label,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String label;
-
-  /// 없으면 드롭다운 화살표를 표시한다.
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Ink(
-      height: 36,
-      padding: const EdgeInsets.only(left: 10, right: 6),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: AppColors.textMain),
-            ),
-          ),
-          const SizedBox(width: 2),
-          trailing ??
-              const Icon(
-                Icons.arrow_drop_down,
-                size: 18,
-                color: AppColors.textSub,
-              ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({
-    required this.icon,
-    required this.color,
-    required this.label,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 10),
-        Text(label),
-      ],
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-    this.icon,
-    this.iconColor,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-  final IconData? icon;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      avatar: icon == null ? null : Icon(icon, size: 16, color: iconColor),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      showCheckmark: false,
-      backgroundColor: Colors.white,
-      selectedColor: AppColors.primaryLight,
-      side: BorderSide(color: selected ? AppColors.primary : AppColors.track),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      labelStyle: TextStyle(
-        fontSize: 13,
-        color: selected ? AppColors.primary : AppColors.textMain,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-      ),
-      visualDensity: VisualDensity.compact,
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({super.key, required this.total, required this.done});
-
-  final int total;
-  final int done;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = total == 0 ? 0.0 : done / total;
-    final percent = (progress * 100).round();
-
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _StatItem(label: '전체', value: '$total'),
-                ),
-                Expanded(
-                  child: _StatItem(label: '완료', value: '$done'),
-                ),
-                Expanded(
-                  child: _StatItem(
-                    label: '진행률',
-                    value: '$percent%',
-                    highlight: true,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-                backgroundColor: AppColors.track,
-                color: AppColors.primary,
-                semanticsLabel: '진행률',
-                semanticsValue: '$percent%',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-  });
-
-  final String label;
-  final String value;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: AppColors.textSub),
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: highlight ? AppColors.primary : AppColors.textMain,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TodoCard extends StatelessWidget {
-  const _TodoCard({
-    super.key,
-    required this.todo,
-    required this.busy,
-    required this.onToggle,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final Todo todo;
-
-  /// 서버 응답을 기다리는 중이면 조작을 막고 진행 표시를 보여 준다.
-  final bool busy;
-  final VoidCallback onToggle;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final today = dateOnly(DateTime.now());
-    final overdue = todo.isOverdue(today);
-    final dueDate = todo.dueDate;
-
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: overdue
-            ? BorderSide(
-                color: AppColors.danger.withValues(alpha: 0.5),
-                width: 1.5,
-              )
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        onTap: busy ? null : onToggle,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-          child: Row(
-            children: [
-              if (busy)
-                const SizedBox.square(
-                  dimension: 24,
-                  child: Padding(
-                    padding: EdgeInsets.all(3),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else
-                Icon(
-                  todo.done ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: todo.done ? AppColors.primary : AppColors.iconMuted,
-                ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      todo.title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: todo.done
-                            ? AppColors.textMuted
-                            : AppColors.textMain,
-                        decoration: todo.done
-                            ? TextDecoration.lineThrough
-                            : null,
-                        decorationColor: AppColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Opacity(
-                      opacity: todo.done ? 0.6 : 1,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          _Badge(
-                            icon: todo.category.icon,
-                            label: todo.category.label,
-                            color: todo.category.color,
-                          ),
-                          _Badge(
-                            icon: Icons.flag,
-                            label: todo.priority.label,
-                            color: todo.priority.color,
-                          ),
-                          if (dueDate != null)
-                            overdue
-                                ? _Badge(
-                                    icon: Icons.event_busy,
-                                    label:
-                                        '기한 지남 · ${formatDueDate(dueDate, today)}',
-                                    color: AppColors.danger,
-                                  )
-                                : _Badge(
-                                    icon: Icons.event,
-                                    label:
-                                        '마감 ${formatDueDate(dueDate, today)}',
-                                    color: AppColors.textSub,
-                                  ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: '수정',
-                icon: const Icon(Icons.edit_outlined),
-                color: AppColors.textMuted,
-                visualDensity: VisualDensity.compact,
-                onPressed: busy ? null : onEdit,
-              ),
-              IconButton(
-                tooltip: '삭제',
-                icon: const Icon(Icons.delete_outline),
-                color: AppColors.textMuted,
-                visualDensity: VisualDensity.compact,
-                onPressed: busy ? null : onDelete,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.icon, required this.label, required this.color});
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 불러오기 실패처럼 다시 시도 버튼이 필요한 상태를 보여 준다.
-class _StatusView extends StatelessWidget {
-  const _StatusView({
-    required this.icon,
-    required this.message,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  final IconData icon;
-  final String message;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: AppColors.iconMuted),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSub, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: Text(actionLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: AppColors.iconMuted),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSub, height: 1.5),
-          ),
-        ],
-      ),
     );
   }
 }
