@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/date_utils.dart';
+import 'models/todo.dart';
 import 'supabase_config.dart';
 
 part 'auth.dart';
@@ -107,155 +109,6 @@ class _SupabaseBootstrapState extends State<_SupabaseBootstrap> {
 }
 
 const _danger = Color(0xFFDC2626);
-
-enum TodoCategory {
-  work('업무', Icons.work_outline, Color(0xFF2563EB)),
-  personal('개인', Icons.person_outline, Color(0xFF7C3AED)),
-  exercise('운동', Icons.fitness_center, Color(0xFF059669)),
-  other('기타', Icons.label_outline, Color(0xFF64748B));
-
-  const TodoCategory(this.label, this.icon, this.color);
-
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  /// 저장된 값('work' 또는 '업무')이 없거나 알 수 없으면 '기타'로 처리한다.
-  static TodoCategory fromName(Object? name) => values.firstWhere(
-    (c) => c.name == name || c.label == name,
-    orElse: () => other,
-  );
-}
-
-enum TodoPriority {
-  high('높음', _danger),
-  medium('보통', Color(0xFFD97706)),
-  low('낮음', Color(0xFF6B7280));
-
-  const TodoPriority(this.label, this.color);
-
-  final String label;
-  final Color color;
-
-  /// 저장된 값('high' 또는 '높음')이 없거나 알 수 없으면 '보통'으로 처리한다.
-  static TodoPriority fromName(Object? name) => values.firstWhere(
-    (p) => p.name == name || p.label == name,
-    orElse: () => medium,
-  );
-}
-
-DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
-
-String _toIsoDate(DateTime date) =>
-    '${date.year.toString().padLeft(4, '0')}-'
-    '${date.month.toString().padLeft(2, '0')}-'
-    '${date.day.toString().padLeft(2, '0')}';
-
-DateTime? _parseIsoDate(Object? value) {
-  if (value is! String) return null;
-  final parsed = DateTime.tryParse(value);
-  return parsed == null ? null : _dateOnly(parsed);
-}
-
-/// 마감일을 '오늘', '내일', '10월 25일'처럼 읽기 쉬운 문자열로 바꾼다.
-String _formatDueDate(DateTime due, DateTime today) {
-  // 서머타임 영향을 받지 않도록 UTC 날짜끼리 비교한다.
-  final days = DateTime.utc(
-    due.year,
-    due.month,
-    due.day,
-  ).difference(DateTime.utc(today.year, today.month, today.day)).inDays;
-  if (days == 0) return '오늘';
-  if (days == 1) return '내일';
-  if (days == -1) return '어제';
-  return due.year == today.year
-      ? '${due.month}월 ${due.day}일'
-      : '${due.year}년 ${due.month}월 ${due.day}일';
-}
-
-class Todo {
-  const Todo({
-    required this.id,
-    required this.title,
-    this.done = false,
-    this.category = TodoCategory.other,
-    this.priority = TodoPriority.medium,
-    this.dueDate,
-    this.createdAt,
-  });
-
-  /// Supabase public.todos 행을 읽는다. 비어 있거나 알 수 없는 값은 기본값으로 채운다.
-  factory Todo.fromRow(Map<String, dynamic> row) {
-    return Todo(
-      id: row['id'] as String,
-      title: row['title'] as String? ?? '',
-      done: row['is_completed'] as bool? ?? false,
-      category: TodoCategory.fromName(row['category']),
-      priority: TodoPriority.fromName(row['priority']),
-      dueDate: _parseIsoDate(row['due_date']),
-      createdAt: DateTime.tryParse(row['created_at'] as String? ?? ''),
-    );
-  }
-
-  /// 서버 연결 전 버전이 기기에 저장한 형식을 읽는다.
-  /// 새 필드가 없는 이전 버전 데이터는 기본값으로 채운다.
-  factory Todo.fromJson(Map<String, dynamic> json) {
-    return Todo(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      done: json['done'] as bool? ?? false,
-      category: TodoCategory.fromName(json['category']),
-      priority: TodoPriority.fromName(json['priority']),
-      dueDate: _parseIsoDate(json['dueDate']),
-    );
-  }
-
-  final String id;
-  final String title;
-  final bool done;
-  final TodoCategory category;
-  final TodoPriority priority;
-
-  /// 시각 없이 날짜만 사용한다. null이면 마감일 없음.
-  final DateTime? dueDate;
-
-  /// 서버에서 정한 생성 시각. 아직 저장 전이면 null.
-  final DateTime? createdAt;
-
-  bool isOverdue(DateTime today) =>
-      !done && dueDate != null && dueDate!.isBefore(_dateOnly(today));
-
-  Todo copyWith({
-    String? id,
-    String? title,
-    bool? done,
-    TodoCategory? category,
-    TodoPriority? priority,
-    DateTime? dueDate,
-    bool clearDueDate = false,
-    DateTime? createdAt,
-  }) => Todo(
-    id: id ?? this.id,
-    title: title ?? this.title,
-    done: done ?? this.done,
-    category: category ?? this.category,
-    priority: priority ?? this.priority,
-    dueDate: clearDueDate ? null : dueDate ?? this.dueDate,
-    createdAt: createdAt ?? this.createdAt,
-  );
-
-  /// public.todos에 보낼 값. [userId]가 있으면 user_id도 넣는다(추가할 때).
-  Map<String, dynamic> toRow({String? userId}) => {
-    'id': id,
-    'user_id': ?userId,
-    'title': title,
-    'category': category.name,
-    'priority': priority.name,
-    'due_date': dueDate == null ? null : _toIsoDate(dueDate!),
-    'is_completed': done,
-    'created_at': ?createdAt?.toUtc().toIso8601String(),
-  };
-}
 
 class TodoPage extends StatefulWidget {
   const TodoPage({
@@ -962,7 +815,7 @@ class _TodoOptionPickers extends StatelessWidget {
   final String keyPrefix;
 
   Future<void> _pickDueDate(BuildContext context) async {
-    final today = _dateOnly(DateTime.now());
+    final today = dateOnly(DateTime.now());
     final current = dueDate;
     // 이미 정해진 마감일이 선택 범위 밖이어도 열 수 있게 범위를 넓힌다.
     final picked = await showDatePicker(
@@ -974,7 +827,7 @@ class _TodoOptionPickers extends StatelessWidget {
       cancelText: '취소',
       confirmText: '확인',
     );
-    if (picked != null) onDueDateChanged(_dateOnly(picked));
+    if (picked != null) onDueDateChanged(dateOnly(picked));
   }
 
   @override
@@ -1041,7 +894,7 @@ class _TodoOptionPickers extends StatelessWidget {
             color: dueDate == null ? _textSub : _primaryBlue,
             label: dueDate == null
                 ? '마감일 선택'
-                : '마감 ${_formatDueDate(dueDate, _dateOnly(DateTime.now()))}',
+                : '마감 ${formatDueDate(dueDate, dateOnly(DateTime.now()))}',
             trailing: dueDate == null
                 ? null
                 : InkResponse(
@@ -1392,7 +1245,7 @@ class _TodoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final today = _dateOnly(DateTime.now());
+    final today = dateOnly(DateTime.now());
     final overdue = todo.isOverdue(today);
     final dueDate = todo.dueDate;
 
@@ -1465,13 +1318,13 @@ class _TodoCard extends StatelessWidget {
                                 ? _Badge(
                                     icon: Icons.event_busy,
                                     label:
-                                        '기한 지남 · ${_formatDueDate(dueDate, today)}',
+                                        '기한 지남 · ${formatDueDate(dueDate, today)}',
                                     color: _danger,
                                   )
                                 : _Badge(
                                     icon: Icons.event,
                                     label:
-                                        '마감 ${_formatDueDate(dueDate, today)}',
+                                        '마감 ${formatDueDate(dueDate, today)}',
                                     color: _textSub,
                                   ),
                         ],

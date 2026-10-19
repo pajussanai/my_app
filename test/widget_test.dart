@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthException, PostgrestException;
 
 import 'package:my_app/main.dart';
+import 'package:my_app/models/todo.dart';
 import 'package:my_app/supabase_config.dart';
 
 const testUser = AppUser(id: 'user-1', email: 'me@example.com');
