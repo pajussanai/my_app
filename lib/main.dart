@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app/theme.dart';
 import 'core/date_utils.dart';
 import 'core/errors.dart';
 import 'models/todo.dart';
@@ -17,11 +18,6 @@ part 'auth.dart';
 void main() {
   runApp(const MyApp());
 }
-
-const _primaryBlue = Color(0xFF2563EB);
-const _background = Color(0xFFF2F5FB);
-const _textMain = Color(0xFF1F2937);
-const _textSub = Color(0xFF6B7280);
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key, this.auth, this.repository});
@@ -39,14 +35,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: '오늘 할 일',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: _primaryBlue,
-          primary: _primaryBlue,
-          surface: Colors.white,
-        ),
-        scaffoldBackgroundColor: _background,
-      ),
+      theme: buildAppTheme(),
       home: auth != null && repository != null
           ? AuthGate(auth: auth, repository: repository)
           : const _SupabaseBootstrap(),
@@ -107,8 +96,6 @@ class _SupabaseBootstrapState extends State<_SupabaseBootstrap> {
     );
   }
 }
-
-const _danger = Color(0xFFDC2626);
 
 class TodoPage extends StatefulWidget {
   const TodoPage({
@@ -472,20 +459,20 @@ class _TodoPageState extends State<TodoPage> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: _textMain,
+                  color: AppColors.textMain,
                 ),
               ),
             ),
             IconButton(
               tooltip: '새로고침',
               icon: const Icon(Icons.refresh),
-              color: _textSub,
+              color: AppColors.textSub,
               onPressed: _loadState == _LoadState.loading ? null : _loadTodos,
             ),
             IconButton(
               tooltip: '로그아웃',
               icon: const Icon(Icons.logout),
-              color: _textSub,
+              color: AppColors.textSub,
               onPressed: _signingOut ? null : _signOut,
             ),
           ],
@@ -493,7 +480,7 @@ class _TodoPageState extends State<TodoPage> {
         const SizedBox(height: 6),
         const Text(
           '해야 할 일을 적고 하나씩 완료해 보세요.',
-          style: TextStyle(fontSize: 14, color: _textSub),
+          style: TextStyle(fontSize: 14, color: AppColors.textSub),
         ),
         const SizedBox(height: 4),
         Row(
@@ -501,14 +488,14 @@ class _TodoPageState extends State<TodoPage> {
             const Icon(
               Icons.account_circle_outlined,
               size: 16,
-              color: _textSub,
+              color: AppColors.textSub,
             ),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 widget.user.email ?? '로그인됨',
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, color: _textSub),
+                style: const TextStyle(fontSize: 13, color: AppColors.textSub),
               ),
             ),
           ],
@@ -588,7 +575,7 @@ class _TodoPageState extends State<TodoPage> {
     return Card(
       key: const Key('legacyBanner'),
       elevation: 0,
-      color: const Color(0xFFFFF7E6),
+      color: AppColors.warningBackground,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
@@ -608,7 +595,10 @@ class _TodoPageState extends State<TodoPage> {
                   child: Text(
                     '서버 연결 전에 이 브라우저에 저장한 할 일 $count개가 있습니다. '
                     '자동으로 옮겨지지 않으며, 가져오면 현재 계정에 저장됩니다.',
-                    style: const TextStyle(color: _textMain, height: 1.4),
+                    style: const TextStyle(
+                      color: AppColors.textMain,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
@@ -648,25 +638,14 @@ class _TodoPageState extends State<TodoPage> {
     Widget? prefixIcon,
     Widget? suffixIcon,
   }) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    );
-
-    return InputDecoration(
+    return appFieldDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: _textSub),
-      filled: true,
+      hintStyle: const TextStyle(color: AppColors.textSub),
       fillColor: fillColor,
       isDense: true,
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: border,
-      enabledBorder: border,
-      focusedBorder: border.copyWith(
-        borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
-      ),
     );
   }
 
@@ -692,7 +671,7 @@ class _TodoPageState extends State<TodoPage> {
                     onSubmitted: (_) => _addTodo(),
                     decoration: _inputDecoration(
                       hintText: '할 일을 입력하세요',
-                      fillColor: _background,
+                      fillColor: AppColors.background,
                     ),
                   ),
                 ),
@@ -744,12 +723,12 @@ class _TodoPageState extends State<TodoPage> {
           decoration: _inputDecoration(
             hintText: '제목으로 검색',
             fillColor: Colors.white,
-            prefixIcon: const Icon(Icons.search, color: _textSub),
+            prefixIcon: const Icon(Icons.search, color: AppColors.textSub),
             suffixIcon: _searchController.text.isEmpty
                 ? null
                 : IconButton(
                     tooltip: '검색어 지우기',
-                    icon: const Icon(Icons.close, color: _textSub),
+                    icon: const Icon(Icons.close, color: AppColors.textSub),
                     onPressed: _searchController.clear,
                   ),
           ),
@@ -891,7 +870,7 @@ class _TodoOptionPickers extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           child: _PickerChip(
             icon: Icons.event,
-            color: dueDate == null ? _textSub : _primaryBlue,
+            color: dueDate == null ? AppColors.textSub : AppColors.primary,
             label: dueDate == null
                 ? '마감일 선택'
                 : '마감 ${formatDueDate(dueDate, dateOnly(DateTime.now()))}',
@@ -903,7 +882,11 @@ class _TodoOptionPickers extends StatelessWidget {
                     radius: 16,
                     child: const Tooltip(
                       message: '마감일 지우기',
-                      child: Icon(Icons.close, size: 16, color: _textSub),
+                      child: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: AppColors.textSub,
+                      ),
                     ),
                   ),
           ),
@@ -960,11 +943,6 @@ class _EditTodoDialogState extends State<_EditTodoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    );
-
     return AlertDialog(
       title: const Text('할 일 수정'),
       backgroundColor: Colors.white,
@@ -983,15 +961,9 @@ class _EditTodoDialogState extends State<_EditTodoDialog> {
               autofocus: true,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _save(),
-              decoration: InputDecoration(
+              decoration: appFieldDecoration(
                 hintText: '할 일 제목',
-                filled: true,
-                fillColor: _background,
-                border: border,
-                enabledBorder: border,
-                focusedBorder: border.copyWith(
-                  borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
-                ),
+                fillColor: AppColors.background,
               ),
             ),
             const SizedBox(height: 12),
@@ -1043,7 +1015,7 @@ class _PickerChip extends StatelessWidget {
       height: 36,
       padding: const EdgeInsets.only(left: 10, right: 6),
       decoration: BoxDecoration(
-        color: _background,
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1055,12 +1027,16 @@ class _PickerChip extends StatelessWidget {
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: _textMain),
+              style: const TextStyle(fontSize: 13, color: AppColors.textMain),
             ),
           ),
           const SizedBox(width: 2),
           trailing ??
-              const Icon(Icons.arrow_drop_down, size: 18, color: _textSub),
+              const Icon(
+                Icons.arrow_drop_down,
+                size: 18,
+                color: AppColors.textSub,
+              ),
         ],
       ),
     );
@@ -1114,14 +1090,12 @@ class _FilterChip extends StatelessWidget {
       onSelected: (_) => onSelected(),
       showCheckmark: false,
       backgroundColor: Colors.white,
-      selectedColor: const Color(0xFFDBE6FE),
-      side: BorderSide(
-        color: selected ? _primaryBlue : const Color(0xFFE5EAF3),
-      ),
+      selectedColor: AppColors.primaryLight,
+      side: BorderSide(color: selected ? AppColors.primary : AppColors.track),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       labelStyle: TextStyle(
         fontSize: 13,
-        color: selected ? _primaryBlue : _textMain,
+        color: selected ? AppColors.primary : AppColors.textMain,
         fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
       ),
       visualDensity: VisualDensity.compact,
@@ -1173,8 +1147,8 @@ class _SummaryCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 8,
-                backgroundColor: const Color(0xFFE5EAF3),
-                color: _primaryBlue,
+                backgroundColor: AppColors.track,
+                color: AppColors.primary,
                 semanticsLabel: '진행률',
                 semanticsValue: '$percent%',
               ),
@@ -1204,7 +1178,7 @@ class _StatItem extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 13, color: _textSub),
+          style: const TextStyle(fontSize: 13, color: AppColors.textSub),
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 4),
@@ -1216,7 +1190,7 @@ class _StatItem extends StatelessWidget {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: highlight ? _primaryBlue : _textMain,
+              color: highlight ? AppColors.primary : AppColors.textMain,
             ),
           ),
         ),
@@ -1257,7 +1231,10 @@ class _TodoCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: overdue
-            ? BorderSide(color: _danger.withValues(alpha: 0.5), width: 1.5)
+            ? BorderSide(
+                color: AppColors.danger.withValues(alpha: 0.5),
+                width: 1.5,
+              )
             : BorderSide.none,
       ),
       child: InkWell(
@@ -1277,7 +1254,7 @@ class _TodoCard extends StatelessWidget {
               else
                 Icon(
                   todo.done ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: todo.done ? _primaryBlue : const Color(0xFFC3CBD8),
+                  color: todo.done ? AppColors.primary : AppColors.iconMuted,
                 ),
               const SizedBox(width: 12),
               Expanded(
@@ -1289,11 +1266,13 @@ class _TodoCard extends StatelessWidget {
                       todo.title,
                       style: TextStyle(
                         fontSize: 15,
-                        color: todo.done ? const Color(0xFF9CA3AF) : _textMain,
+                        color: todo.done
+                            ? AppColors.textMuted
+                            : AppColors.textMain,
                         decoration: todo.done
                             ? TextDecoration.lineThrough
                             : null,
-                        decorationColor: const Color(0xFF9CA3AF),
+                        decorationColor: AppColors.textMuted,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -1319,13 +1298,13 @@ class _TodoCard extends StatelessWidget {
                                     icon: Icons.event_busy,
                                     label:
                                         '기한 지남 · ${formatDueDate(dueDate, today)}',
-                                    color: _danger,
+                                    color: AppColors.danger,
                                   )
                                 : _Badge(
                                     icon: Icons.event,
                                     label:
                                         '마감 ${formatDueDate(dueDate, today)}',
-                                    color: _textSub,
+                                    color: AppColors.textSub,
                                   ),
                         ],
                       ),
@@ -1336,14 +1315,14 @@ class _TodoCard extends StatelessWidget {
               IconButton(
                 tooltip: '수정',
                 icon: const Icon(Icons.edit_outlined),
-                color: const Color(0xFF9CA3AF),
+                color: AppColors.textMuted,
                 visualDensity: VisualDensity.compact,
                 onPressed: busy ? null : onEdit,
               ),
               IconButton(
                 tooltip: '삭제',
                 icon: const Icon(Icons.delete_outline),
-                color: const Color(0xFF9CA3AF),
+                color: AppColors.textMuted,
                 visualDensity: VisualDensity.compact,
                 onPressed: busy ? null : onDelete,
               ),
@@ -1414,12 +1393,12 @@ class _StatusView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: const Color(0xFFC3CBD8)),
+            Icon(icon, size: 48, color: AppColors.iconMuted),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _textSub, height: 1.5),
+              style: const TextStyle(color: AppColors.textSub, height: 1.5),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -1447,12 +1426,12 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 48, color: const Color(0xFFC3CBD8)),
+          Icon(icon, size: 48, color: AppColors.iconMuted),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _textSub, height: 1.5),
+            style: const TextStyle(color: AppColors.textSub, height: 1.5),
           ),
         ],
       ),

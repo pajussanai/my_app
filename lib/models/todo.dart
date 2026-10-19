@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/theme.dart';
 import '../core/date_utils.dart';
 
 enum TodoCategory {
@@ -22,8 +23,7 @@ enum TodoCategory {
 }
 
 enum TodoPriority {
-  // main.dart의 _danger와 같은 색. 테마 정리 단계에서 한곳으로 모은다.
-  high('높음', Color(0xFFDC2626)),
+  high('높음', AppColors.danger),
   medium('보통', Color(0xFFD97706)),
   low('낮음', Color(0xFF6B7280));
 

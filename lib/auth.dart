@@ -168,13 +168,13 @@ class _AuthPageState extends State<AuthPage> {
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: _textMain,
+                color: AppColors.textMain,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               _isSignUp ? '이메일로 새 계정을 만드세요.' : '로그인하고 할 일을 관리하세요.',
-              style: const TextStyle(fontSize: 14, color: _textSub),
+              style: const TextStyle(fontSize: 14, color: AppColors.textSub),
             ),
             const SizedBox(height: 24),
             TextFormField(
@@ -212,7 +212,7 @@ class _AuthPageState extends State<AuthPage> {
                     _obscurePassword
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined,
-                    color: _textSub,
+                    color: AppColors.textSub,
                   ),
                   onPressed: () =>
                       setState(() => _obscurePassword = !_obscurePassword),
@@ -279,20 +279,10 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   InputDecoration _authDecoration(String label, IconData icon) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    );
-    return InputDecoration(
+    return appFieldDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, color: _textSub),
-      filled: true,
-      fillColor: _background,
-      border: border,
-      enabledBorder: border,
-      focusedBorder: border.copyWith(
-        borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
-      ),
+      prefixIcon: Icon(icon, color: AppColors.textSub),
+      fillColor: AppColors.background,
     );
   }
 }
@@ -352,7 +342,7 @@ class _VerifyEmailViewState extends State<_VerifyEmailView> {
         const Icon(
           Icons.mark_email_unread_outlined,
           size: 48,
-          color: _primaryBlue,
+          color: AppColors.primary,
         ),
         const SizedBox(height: 16),
         const Text(
@@ -361,7 +351,7 @@ class _VerifyEmailViewState extends State<_VerifyEmailView> {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: _textMain,
+            color: AppColors.textMain,
           ),
         ),
         const SizedBox(height: 12),
@@ -369,13 +359,13 @@ class _VerifyEmailViewState extends State<_VerifyEmailView> {
           '${widget.email} 주소로 인증 메일을 보냈습니다.\n'
           '메일의 링크를 눌러 인증을 마친 뒤 로그인해 주세요.',
           textAlign: TextAlign.center,
-          style: const TextStyle(color: _textSub, height: 1.5),
+          style: const TextStyle(color: AppColors.textSub, height: 1.5),
         ),
         const SizedBox(height: 8),
         const Text(
           '메일이 보이지 않으면 스팸함을 확인해 주세요.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: _textSub),
+          style: TextStyle(fontSize: 13, color: AppColors.textSub),
         ),
         if (_notice != null) ...[
           const SizedBox(height: 16),
@@ -384,7 +374,7 @@ class _VerifyEmailViewState extends State<_VerifyEmailView> {
               : Text(
                   _notice!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _primaryBlue),
+                  style: const TextStyle(color: AppColors.primary),
                 ),
         ],
         const SizedBox(height: 20),
@@ -414,15 +404,18 @@ class _ErrorBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _danger.withValues(alpha: 0.08),
+        color: AppColors.danger.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 18, color: _danger),
+          const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(message, style: const TextStyle(color: _danger)),
+            child: Text(
+              message,
+              style: const TextStyle(color: AppColors.danger),
+            ),
           ),
         ],
       ),
