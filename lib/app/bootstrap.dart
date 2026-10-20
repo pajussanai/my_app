@@ -20,19 +20,23 @@ class SupabaseBootstrap extends StatefulWidget {
 
 /// 환경별 채팅 저장소.
 ///
-/// test: 테스트 프로젝트에 채팅 스키마가 적용되어 있어 대화를 서버에 저장한다.
-/// production: 본 프로젝트에는 아직 채팅 스키마가 없으므로 null을 돌려준다
-/// (AuthGate가 저장하지 않는 로컬 데모 저장소를 쓴다).
+/// test·production 모두 해당 Supabase 프로젝트의 채팅 스키마와
+/// Edge Function `chat`을 써서 대화를 서버에 저장한다.
 ///
 /// 답변 방식은 빌드 옵션으로 고른다(기본 ai).
-///   --dart-define=CHAT_ANSWERS=demo  → AI 대신 DB 데모 답변
-ChatRepository? chatRepositoryFor(
+///   --dart-define=CHAT_ANSWERS=demo  → AI 대신 DB 데모 답변(테스트 프로젝트 전용)
+ChatRepository chatRepositoryFor(
   String environment,
   SupabaseClient client, {
   String answers = chatAnswers,
-}) => environment == 'test'
-    ? SupabaseChatRepository(client, mode: chatAnswerModeFrom(answers))
-    : null;
+}) {
+  final mode = chatAnswerModeFrom(answers);
+  // 데모 답변 함수(demo_send_message)는 테스트 프로젝트에만 있다.
+  if (environment == 'production' && mode == ChatAnswerMode.demo) {
+    throw StateError('본 프로젝트는 CHAT_ANSWERS=ai로만 빌드할 수 있습니다.');
+  }
+  return SupabaseChatRepository(client, mode: mode);
+}
 
 const chatAnswers = String.fromEnvironment('CHAT_ANSWERS', defaultValue: 'ai');
 

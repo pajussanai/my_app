@@ -257,7 +257,7 @@ void main() {
       );
     });
 
-    test('test 환경은 서버 저장소, production은 로컬 데모(null)', () {
+    test('test·production 모두 서버 저장소(AI 답변), 데모는 test 전용', () {
       final client = SupabaseClient(
         'https://example.supabase.co',
         'sb_publishable_test',
@@ -265,17 +265,20 @@ void main() {
       addTearDown(client.dispose);
       final repo = chatRepositoryFor('test', client);
       expect(repo, isA<SupabaseChatRepository>());
-      expect(repo!.savesConversations, isTrue);
+      expect(repo.savesConversations, isTrue);
       expect(repo.isDemo, isFalse, reason: '기본은 AI 답변');
-      expect(
-        chatRepositoryFor('test', client, answers: 'demo')!.isDemo,
-        isTrue,
-      );
+      expect(chatRepositoryFor('test', client, answers: 'demo').isDemo, isTrue);
       expect(
         () => chatRepositoryFor('test', client, answers: 'fake'),
         throwsStateError,
       );
-      expect(chatRepositoryFor('production', client), isNull);
+      final prod = chatRepositoryFor('production', client);
+      expect(prod, isA<SupabaseChatRepository>());
+      expect(prod.isDemo, isFalse);
+      expect(
+        () => chatRepositoryFor('production', client, answers: 'demo'),
+        throwsStateError,
+      );
     });
 
     test('서버 함수 오류 코드를 사용자 문구로 바꾼다', () {
