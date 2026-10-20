@@ -1,0 +1,83 @@
+# 축복 챗봇 웹 앱을 GitHub Pages에 배포한다.
+#
+# - main에 푸시되거나 Actions 화면에서 직접 실행하면 동작한다.
+# - 본 프로젝트(SUPABASE_ENV=production)로 빌드한다.
+# - Publishable Key는 저장소 변수 SUPABASE_PUBLISHABLE_KEY에서 읽는다
+#   (Settings → Secrets and variables → Actions → Variables).
+#   Publishable Key 외의 키(Gemini, secret, service_role)는 여기에 넣지 않는다.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 필요한 권한만: 코드 읽기, Pages 배포
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 진행 중인 것은 끝까지 두고 다음 것만 기다린다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pages가 켜져 있지 않으면 빌드 전에 바로 실패한다.
+      - uses: actions/configure-pages@v5
+
+      - name: Check build variables
+        env:
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          case "$SUPABASE_PUBLISHABLE_KEY" in
+            sb_publishable_*) echo "Publishable Key 확인됨" ;;
+            *) echo "::error::저장소 변수 SUPABASE_PUBLISHABLE_KEY(sb_publishable_...)를 설정해 주세요."; exit 1 ;;
+          esac
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.7
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      - name: Build web (production)
+        env:
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: >
+          flutter build web --release
+          --base-href /${{ github.event.repository.name }}/
+          --dart-define=SUPABASE_ENV=production
+          --dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY
+
+      # 번들에 테스트 프로젝트 주소나 비밀 키가 들어가면 배포하지 않는다.
+      - name: Scan bundle
+        run: |
+          if grep -qE 'dnqrwybyksnoyqtkuwlp|sk-ant-|AIza[0-9A-Za-z_-]{30}|sb_secret_[A-Za-z0-9]{10}' build/web/main.dart.js; then
+            echo "::error::번들에 테스트 프로젝트 주소나 비밀 키가 있습니다."; exit 1
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
