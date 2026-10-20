@@ -142,7 +142,7 @@ class _AuthPageState extends State<AuthPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '오늘 할 일',
+              '축복 챗봇',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -151,7 +151,7 @@ class _AuthPageState extends State<AuthPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              _isSignUp ? '이메일로 새 계정을 만드세요.' : '로그인하고 할 일을 관리하세요.',
+              _isSignUp ? '이메일로 새 계정을 만드세요.' : '로그인하고 대화를 시작하세요.',
               style: const TextStyle(fontSize: 14, color: AppColors.textSub),
             ),
             const SizedBox(height: 24),

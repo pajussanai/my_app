@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
     final repository = this.repository;
 
     return MaterialApp(
-      title: '오늘 할 일',
+      title: '축복 챗봇',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: auth != null && repository != null
