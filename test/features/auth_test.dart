@@ -1,39 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import 'package:my_app/main.dart';
-import 'package:my_app/models/todo.dart';
 import 'package:my_app/services/auth_service.dart';
 
 import '../helpers/fakes.dart';
 import '../helpers/test_helpers.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   group('인증', () {
-    testWidgets('로그인하지 않으면 할 일 화면에 들어갈 수 없다', (tester) async {
-      final repo = FakeTodoRepository([const Todo(id: '1', title: '비밀 할 일')]);
-      await tester.pumpWidget(MyApp(auth: FakeAuthService(), repository: repo));
+    testWidgets('로그인하지 않으면 채팅 화면에 들어갈 수 없다', (tester) async {
+      final chat = FakeChatRepository();
+      await tester.pumpWidget(
+        MyApp(auth: FakeAuthService(), chatRepository: chat),
+      );
       await tester.pumpAndSettle();
 
       expect(emailInput, findsOneWidget);
       expect(find.widgetWithText(FilledButton, '로그인'), findsOneWidget);
-      expect(todoInput, findsNothing);
-      expect(find.text('비밀 할 일'), findsNothing);
-      expect(repo.fetchCount, 0);
+      expect(chatInput, findsNothing);
+      expect(chat.created, isEmpty);
     });
 
-    testWidgets('저장된 세션이 있으면 바로 할 일 화면을 보여 준다', (tester) async {
+    testWidgets('저장된 세션이 있으면 바로 채팅 화면을 보여 준다', (tester) async {
       await pumpSignedIn(tester);
 
-      expect(todoInput, findsOneWidget);
+      expect(chatInput, findsOneWidget);
+      await openConversationDrawer(tester);
       expect(find.text('me@example.com'), findsOneWidget);
     });
 
-    testWidgets('로그인 성공 시 할 일 화면으로 이동', (tester) async {
+    testWidgets('로그인 성공 시 채팅 화면으로 이동', (tester) async {
       final auth = FakeAuthService();
       await pumpSignedOut(tester, auth);
 
@@ -43,7 +41,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(auth.calls, ['signIn:me@example.com']);
-      expect(todoInput, findsOneWidget);
+      expect(chatInput, findsOneWidget);
     });
 
     testWidgets('잘못된 비밀번호면 오류를 보여 주고 로그인 화면에 머문다', (tester) async {
@@ -61,7 +59,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('이메일 또는 비밀번호가 올바르지 않습니다.'), findsOneWidget);
-      expect(todoInput, findsNothing);
+      expect(chatInput, findsNothing);
     });
 
     testWidgets('입력값이 올바르지 않으면 요청하지 않는다', (tester) async {
@@ -97,7 +95,7 @@ void main() {
 
       expect(find.text('이메일 인증이 필요합니다'), findsOneWidget);
       expect(find.textContaining('new@example.com'), findsOneWidget);
-      expect(todoInput, findsNothing);
+      expect(chatInput, findsNothing);
 
       await tester.tap(find.text('인증 메일 다시 보내기'));
       await tester.pumpAndSettle();
@@ -122,7 +120,7 @@ void main() {
       );
     });
 
-    testWidgets('인증 메일 없이 바로 로그인되는 설정이면 할 일 화면으로 이동', (tester) async {
+    testWidgets('인증 메일 없이 바로 로그인되는 설정이면 채팅 화면으로 이동', (tester) async {
       final auth = FakeAuthService()..signUpOutcome = SignUpOutcome.signedIn;
       await pumpSignedOut(tester, auth);
 
@@ -134,7 +132,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, '회원가입'));
       await tester.pumpAndSettle();
 
-      expect(todoInput, findsOneWidget);
+      expect(chatInput, findsOneWidget);
     });
 
     testWidgets('인증하지 않은 이메일로 로그인하면 인증 안내 화면', (tester) async {
@@ -155,17 +153,15 @@ void main() {
     });
 
     testWidgets('로그아웃하면 로그인 화면으로 돌아간다', (tester) async {
-      final (auth, _) = await pumpSignedIn(
-        tester,
-        todos: [const Todo(id: '1', title: '할 일')],
-      );
+      final auth = await pumpSignedIn(tester);
+      await openConversationDrawer(tester);
 
       await tester.tap(find.byTooltip('로그아웃'));
       await tester.pumpAndSettle();
 
       expect(auth.calls, ['signOut']);
       expect(emailInput, findsOneWidget);
-      expect(find.text('할 일'), findsNothing);
+      expect(chatInput, findsNothing);
     });
   });
 }

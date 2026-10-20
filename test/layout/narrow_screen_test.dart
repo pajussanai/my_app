@@ -1,17 +1,14 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:my_app/models/todo.dart';
+import 'package:my_app/models/chat_message.dart';
+import 'package:my_app/models/chat_usage.dart';
+import 'package:my_app/models/conversation.dart';
 
 import '../helpers/fakes.dart';
 import '../helpers/test_helpers.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
   group('좁은 화면', () {
     void useNarrowScreen(WidgetTester tester) {
       tester.view.physicalSize = const Size(320, 480);
@@ -39,40 +36,54 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('할 일 화면과 수정 화면이 깨지지 않음', (tester) async {
+    testWidgets('긴 대화와 대화 목록 서랍(사용량 카드 포함)이 깨지지 않음', (tester) async {
       useNarrowScreen(tester);
-      SharedPreferences.setMockInitialValues({
-        'todos': jsonEncode([
-          {'id': 'x', 'title': '예전 할 일'},
-        ]),
-      });
+      final created = DateTime(2026, 10, 20, 9);
       await pumpSignedIn(
         tester,
-        tallScreen: false,
-        todos: [
-          for (var i = 0; i < 8; i++)
-            Todo(
-              id: '$i',
-              title: '아주 긴 할 일 제목 $i ' * 4,
-              done: i.isEven,
-              category: TodoCategory.exercise,
-              priority: TodoPriority.high,
-              dueDate: i < 4 ? DateTime(2000, 12, 31) : DateTime(2999, 12, 31),
-            ),
-        ],
+        chatRepository:
+            FakeChatRepository(
+                conversations: [
+                  Conversation(
+                    id: 'c',
+                    title: '아주 긴 대화 제목 ' * 6,
+                    createdAt: created,
+                  ),
+                ],
+                messages: {
+                  'c': [
+                    for (var i = 0; i < 6; i++)
+                      ChatMessage(
+                        id: 'm$i',
+                        conversationId: 'c',
+                        role: i.isEven ? ChatRole.user : ChatRole.assistant,
+                        content: '엄마아~ 아주 긴 이야기 $i ' * 8,
+                        createdAt: created,
+                      ),
+                  ],
+                },
+              )
+              ..usage = const ChatUsage(
+                day: '2026-10-20',
+                provider: 'gemini',
+                model: 'gemini-3.5-flash-lite',
+                aiConfigured: true,
+                requestCount: 12345,
+                inputTokens: 1234567,
+                outputTokens: 765432,
+                dailyLimit: 100000,
+                remaining: 87655,
+              ),
       );
       expect(tester.takeException(), isNull);
 
-      await tester.scrollUntilVisible(
-        inCard('0', find.byTooltip('수정')),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.ensureVisible(inCard('0', find.byTooltip('수정')));
+      await openConversationDrawer(tester);
+      expect(find.byKey(const Key('usageCard')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.textContaining('아주 긴 대화 제목').first);
       await tester.pumpAndSettle();
-      await tester.tap(inCard('0', find.byTooltip('수정')));
-      await tester.pumpAndSettle();
-      expect(find.text('할 일 수정'), findsOneWidget);
+      expect(find.textContaining('아주 긴 이야기 5'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

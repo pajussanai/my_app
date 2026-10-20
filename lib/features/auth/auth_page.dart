@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
+import '../../widgets/baby_avatar.dart';
 import '../../core/errors.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/error_box.dart';
@@ -75,7 +76,7 @@ class _AuthPageState extends State<AuthPage> {
           _showVerification(email);
         }
       } else {
-        // 성공하면 AuthGate가 할 일 화면으로 바꾼다.
+        // 성공하면 AuthGate가 채팅 화면으로 바꾼다.
         await widget.auth.signIn(email: email, password: password);
       }
     } on AuthException catch (e) {
@@ -99,32 +100,41 @@ class _AuthPageState extends State<AuthPage> {
     final pendingEmail = _pendingEmail;
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Card(
-                elevation: 0,
-                color: Colors.white,
-                margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: pendingEmail != null
-                      ? VerifyEmailView(
-                          auth: widget.auth,
-                          email: pendingEmail,
-                          onBack: () => setState(() {
-                            _pendingEmail = null;
-                            _mode = _AuthMode.signIn;
-                            _error = null;
-                          }),
-                        )
-                      : _buildForm(),
+      body: DecoratedBox(
+        // 크림색에서 연한 핑크로 번지는 포근한 바탕
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.background, AppColors.primaryLight],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: softShadow,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+                    child: pendingEmail != null
+                        ? VerifyEmailView(
+                            auth: widget.auth,
+                            email: pendingEmail,
+                            onBack: () => setState(() {
+                              _pendingEmail = null;
+                              _mode = _AuthMode.signIn;
+                              _error = null;
+                            }),
+                          )
+                        : _buildForm(),
+                  ),
                 ),
               ),
             ),
@@ -141,17 +151,21 @@ class _AuthPageState extends State<AuthPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Center(child: BabyAvatar(size: 76)),
+            const SizedBox(height: 16),
             const Text(
               '축복 챗봇',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 28,
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textMain,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              _isSignUp ? '이메일로 새 계정을 만드세요.' : '로그인하고 대화를 시작하세요.',
+              _isSignUp ? '이메일로 새 계정을 만들어 주세요.' : '로그인하고 뱃속 아기와 이야기를 나눠 보세요 💕',
+              textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14, color: AppColors.textSub),
             ),
             const SizedBox(height: 24),
@@ -229,11 +243,6 @@ class _AuthPageState extends State<AuthPage> {
               height: 48,
               child: FilledButton(
                 onPressed: _submitting ? null : _submit,
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
                 child: _submitting
                     ? const SizedBox.square(
                         dimension: 20,

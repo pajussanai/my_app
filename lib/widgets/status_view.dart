@@ -20,25 +20,36 @@ class StatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: AppColors.iconMuted),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSub, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: Text(actionLabel),
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryLight,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 38, color: AppColors.primary),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textMain, height: 1.6),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(actionLabel),
+              ),
+            ],
+          ),
         ),
       ),
     );

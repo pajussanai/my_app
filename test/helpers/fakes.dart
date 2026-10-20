@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
-import 'package:my_app/models/todo.dart';
+import 'package:my_app/models/chat_message.dart';
+import 'package:my_app/models/chat_usage.dart';
+import 'package:my_app/models/conversation.dart';
 import 'package:my_app/services/auth_service.dart';
-import 'package:my_app/services/todo_repository.dart';
+import 'package:my_app/services/chat_repository.dart';
 
 /// 서버 대신 쓰는 인증 서비스.
 class FakeAuthService implements AuthService {
@@ -63,78 +65,141 @@ class FakeAuthService implements AuthService {
   }
 }
 
-/// 서버 테이블 대신 메모리에 저장하는 저장소.
-class FakeTodoRepository implements TodoRepository {
-  FakeTodoRepository([List<Todo> initial = const []]) : rows = [...initial];
+const permissionDenied = PostgrestException(message: 'denied', code: '42501');
 
-  /// 서버에 저장된 상태
-  final List<Todo> rows;
+/// 서버 대신 메모리에서 대화를 다루는 채팅 저장소.
+///
+/// [replies]가 있으면 테스트가 답변 이벤트를 직접 보낸다(스트리밍 확인용).
+/// 없으면 '안녕'·'하세요' 두 조각으로 바로 답한다.
+class FakeChatRepository implements ChatRepository {
+  FakeChatRepository({
+    List<Conversation> conversations = const [],
+    Map<String, List<ChatMessage>> messages = const {},
+    this.isDemo = false,
+    this.savesConversations = true,
+  }) : conversations = [...conversations],
+       messages = {
+         for (final e in messages.entries) e.key: [...e.value],
+       };
 
-  Object? fetchError;
-  Object? addError;
-  Object? updateError;
+  @override
+  final bool isDemo;
+
+  @override
+  final bool savesConversations;
+
+  final List<Conversation> conversations;
+  final Map<String, List<ChatMessage>> messages;
+
+  Object? fetchConversationsError;
+  Object? fetchMessagesError;
+
+  /// fetchUsage가 돌려줄 사용량과 오류, 호출 횟수
+  ChatUsage? usage;
+  Object? usageError;
+  int usageFetches = 0;
+
+  @override
+  Future<ChatUsage?> fetchUsage() async {
+    usageFetches++;
+    final error = usageError;
+    if (error != null) throw error;
+    return usage;
+  }
+
+  Object? createError;
   Object? deleteError;
 
-  /// true면 서버에는 반영한 뒤 응답만 실패한다(응답 유실 상황).
-  bool applyBeforeError = false;
+  /// 값이 있으면 다음 답변을 이 컨트롤러로 테스트가 직접 흘려보낸다.
+  StreamController<ChatReplyEvent>? replies;
 
-  /// 값이 있으면 완료될 때까지 응답을 미룬다.
-  Completer<void>? gate;
+  /// 값이 있으면 다음 답변을 이 오류로 실패시킨다(한 번만).
+  Object? replyError;
 
-  int fetchCount = 0;
-  final updates = <Todo>[];
-  final added = <Todo>[];
+  /// replyError로 실패할 때 질문은 저장된 것으로 볼지
+  bool replyErrorUserSaved = false;
 
-  Future<void> _respond() async {
-    if (gate != null) await gate!.future;
+  final sent = <String>[];
+  final created = <String?>[];
+  final deleted = <String>[];
+  var _seq = 0;
+
+  @override
+  Future<List<Conversation>> fetchConversations() async {
+    if (fetchConversationsError != null) throw fetchConversationsError!;
+    return [...conversations]..sort((a, b) => b.sortTime.compareTo(a.sortTime));
   }
 
   @override
-  Future<List<Todo>> fetchTodos() async {
-    fetchCount++;
-    await _respond();
-    if (fetchError != null) throw fetchError!;
-    return List.of(rows);
+  Future<Conversation> createConversation({String? title}) async {
+    created.add(title);
+    if (createError != null) throw createError!;
+    final c = Conversation(
+      id: 'c${++_seq}',
+      title: title,
+      createdAt: DateTime(2026, 10, 20, 9, _seq),
+    );
+    conversations.add(c);
+    messages[c.id] = [];
+    return c;
   }
 
   @override
-  Future<Todo> addTodo(Todo todo) async {
-    await _respond();
-    added.add(todo);
-    if (addError != null && !applyBeforeError) throw addError!;
-    final saved = todo.copyWith(createdAt: DateTime.utc(2026));
-    rows.add(saved);
-    if (addError != null) throw addError!;
-    return saved;
-  }
-
-  @override
-  Future<List<Todo>> addTodos(List<Todo> todos) async {
-    await _respond();
-    added.addAll(todos);
-    if (addError != null) throw addError!;
-    rows.addAll(todos);
-    return todos;
-  }
-
-  @override
-  Future<Todo> updateTodo(Todo todo) async {
-    await _respond();
-    updates.add(todo);
-    final index = rows.indexWhere((t) => t.id == todo.id);
-    if (updateError != null && !applyBeforeError) throw updateError!;
-    if (index == -1) throw const TodoNotFoundException();
-    rows[index] = todo;
-    if (updateError != null) throw updateError!;
-    return todo;
-  }
-
-  @override
-  Future<void> deleteTodo(String id) async {
-    await _respond();
+  Future<void> deleteConversation(String id) async {
+    deleted.add(id);
     if (deleteError != null) throw deleteError!;
-    rows.removeWhere((t) => t.id == id);
+    conversations.removeWhere((c) => c.id == id);
+    messages.remove(id);
+  }
+
+  @override
+  Future<List<ChatMessage>> fetchMessages(String conversationId) async {
+    if (fetchMessagesError != null) throw fetchMessagesError!;
+    return [...?messages[conversationId]];
+  }
+
+  /// 서버가 저장했다고 가정한 질문·답변을 만든다.
+  ChatReplyDone doneFor(String conversationId, String question, String answer) {
+    final user = ChatMessage(
+      id: 'm${++_seq}',
+      conversationId: conversationId,
+      role: ChatRole.user,
+      content: question,
+      createdAt: DateTime(2026, 10, 20, 10, _seq),
+    );
+    final assistant = ChatMessage(
+      id: 'm${++_seq}',
+      conversationId: conversationId,
+      role: ChatRole.assistant,
+      content: answer,
+      createdAt: DateTime(2026, 10, 20, 10, _seq),
+    );
+    messages.putIfAbsent(conversationId, () => []).addAll([user, assistant]);
+    return ChatReplyDone(userMessage: user, assistantMessage: assistant);
+  }
+
+  @override
+  Stream<ChatReplyEvent> sendMessage({
+    required String conversationId,
+    required String text,
+  }) {
+    sent.add(text);
+    final controlled = replies;
+    if (controlled != null) {
+      replies = null;
+      return controlled.stream;
+    }
+    final error = replyError;
+    if (error != null) {
+      replyError = null;
+      return Stream.value(
+        ChatReplyFailed(error, userMessageSaved: replyErrorUserSaved),
+      );
+    }
+    return Stream.fromIterable([
+      const ChatReplyDelta('안녕'),
+      const ChatReplyDelta('하세요'),
+      doneFor(conversationId, text, '안녕하세요'),
+    ]);
   }
 }
-
-const permissionDenied = PostgrestException(message: 'denied', code: '42501');
